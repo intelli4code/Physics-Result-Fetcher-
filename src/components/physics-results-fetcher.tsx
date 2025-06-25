@@ -8,10 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Search, Loader2, FileText, CheckCircle2, XCircle, AlertTriangle, Download } from "lucide-react";
+import { Search, Loader2, FileText, CheckCircle2, XCircle, AlertTriangle, Download, Filter, X } from "lucide-react";
 import { fetchStudentResult } from "@/ai/flows/fetch-student-result";
 
 type Result = {
@@ -43,6 +45,8 @@ export function PhysicsResultsFetcher() {
   const [rollNumbersInput, setRollNumbersInput] = useState('');
   const [results, setResults] = useState<Result[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [minMarksFilter, setMinMarksFilter] = useState('');
+  const [filteredResults, setFilteredResults] = useState<Result[] | null>(null);
   const { toast } = useToast();
 
   const handleFetchResults = async () => {
@@ -59,6 +63,9 @@ export function PhysicsResultsFetcher() {
 
     setIsLoading(true);
     setResults([]);
+    setFilteredResults(null);
+    setMinMarksFilter('');
+
 
     try {
       const resultPromises = rollNumbers.map(rollNumber => fetchStudentResult({ rollNumber }));
@@ -76,20 +83,26 @@ export function PhysicsResultsFetcher() {
     }
   };
 
+  const resultsToDisplay = filteredResults ?? results;
+
   const handleGeneratePdf = () => {
-    if (results.length === 0) return;
+    if (resultsToDisplay.length === 0) return;
 
     const doc = new jsPDF();
-    const tableData = results.map(r => [r.rollNumber, r.studentName, r.physicsMarks, r.status]);
+    const tableData = resultsToDisplay.map(r => [r.rollNumber, r.studentName, r.physicsMarks, r.status]);
+    const isFiltered = filteredResults !== null;
 
     doc.setFontSize(18);
     doc.text("Physics Results Report", 14, 22);
     doc.setFontSize(11);
     doc.setTextColor(100);
     doc.text(`Fetched on: ${new Date().toLocaleDateString()}`, 14, 29);
+    if(isFiltered) {
+        doc.text(`Filtered by: Minimum ${minMarksFilter} Physics Marks`, 14, 36);
+    }
 
     autoTable(doc, {
-      startY: 35,
+      startY: isFiltered ? 42 : 35,
       head: [['Roll Number', 'Student Name', 'Physics Marks', 'Status']],
       body: tableData,
       headStyles: { fillColor: [0, 119, 146] }, // A shade of blue-green
@@ -104,6 +117,31 @@ export function PhysicsResultsFetcher() {
 
     doc.save('physics-results.pdf');
   };
+
+  const handleApplyFilter = () => {
+    const minMarks = parseInt(minMarksFilter, 10);
+    if (isNaN(minMarks)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Filter",
+        description: "Please enter a valid number for minimum marks.",
+      });
+      return;
+    }
+
+    const filtered = results.filter(result => {
+      const marks = parseInt(result.physicsMarks, 10);
+      return !isNaN(marks) && marks >= minMarks;
+    });
+
+    setFilteredResults(filtered);
+  };
+
+  const handleClearFilter = () => {
+    setFilteredResults(null);
+    setMinMarksFilter('');
+  };
+
 
   return (
     <Card className="w-full max-w-4xl shadow-xl rounded-xl">
@@ -147,10 +185,33 @@ export function PhysicsResultsFetcher() {
         <CardContent>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-semibold font-headline">Results Report</h3>
-            <Button onClick={handleGeneratePdf} disabled={isLoading || results.length === 0}>
+            <Button onClick={handleGeneratePdf} disabled={isLoading || resultsToDisplay.length === 0}>
               <Download className="mr-2 h-4 w-4"/>
               Generate PDF
             </Button>
+          </div>
+          <div className="flex items-end gap-2 mb-4 p-4 border rounded-lg bg-muted/50">
+            <div className="grid gap-1.5 flex-grow">
+              <Label htmlFor="min-marks">Filter by Minimum Physics Marks</Label>
+              <Input
+                id="min-marks"
+                type="number"
+                placeholder="e.g., 75"
+                value={minMarksFilter}
+                onChange={(e) => setMinMarksFilter(e.target.value)}
+                disabled={isLoading || results.length === 0}
+              />
+            </div>
+            <Button onClick={handleApplyFilter} disabled={isLoading || results.length === 0 || !minMarksFilter}>
+              <Filter className="mr-2 h-4 w-4" />
+              Apply Filter
+            </Button>
+            {filteredResults !== null && (
+              <Button variant="outline" onClick={handleClearFilter}>
+                <X className="mr-2 h-4 w-4" />
+                Clear
+              </Button>
+            )}
           </div>
           <ScrollArea className="h-80 w-full rounded-md border bg-background/50">
             <Table>
@@ -173,7 +234,7 @@ export function PhysicsResultsFetcher() {
                     </TableRow>
                   ))
                 ) : (
-                  results.map((result) => (
+                  resultsToDisplay.map((result) => (
                     <TableRow key={result.rollNumber}>
                       <TableCell className="font-mono">{result.rollNumber}</TableCell>
                       <TableCell>{result.studentName}</TableCell>
@@ -183,6 +244,13 @@ export function PhysicsResultsFetcher() {
                       </TableCell>
                     </TableRow>
                   ))
+                )}
+                {!isLoading && results.length > 0 && resultsToDisplay.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      No students match the current filter.
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
