@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Search, Loader2, FileText, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { fetchStudentResult } from "@/ai/flows/fetch-student-result";
 
 type Result = {
   rollNumber: string;
@@ -57,38 +58,20 @@ export function PhysicsResultsFetcher() {
     setIsLoading(true);
     setResults([]);
 
-    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-
-    const fetchedResults: Result[] = rollNumbers.map(rn => {
-      if (isNaN(Number(rn)) || rn.length < 5 || rn.length > 7) {
-        return {
-          rollNumber: rn,
-          studentName: 'N/A',
-          physicsMarks: 'N/A',
-          status: 'Error'
-        };
-      }
-
-      const random = Math.random();
-      if (random < 0.15) {
-        return {
-          rollNumber: rn,
-          studentName: 'N/A',
-          physicsMarks: 'N/A',
-          status: 'Not Found'
-        };
-      }
-
-      return {
-        rollNumber: rn,
-        studentName: `Student ${rn.slice(-3)}`,
-        physicsMarks: String(Math.floor(Math.random() * (85 - 33 + 1)) + 33),
-        status: 'Success'
-      };
-    });
-
-    setResults(fetchedResults);
-    setIsLoading(false);
+    try {
+      const resultPromises = rollNumbers.map(rollNumber => fetchStudentResult({ rollNumber }));
+      const fetchedResults = await Promise.all(resultPromises);
+      setResults(fetchedResults);
+    } catch (error) {
+      console.error("Failed to fetch results:", error);
+      toast({
+        variant: "destructive",
+        title: "An Error Occurred",
+        description: "Could not fetch results. Please try again later.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -99,13 +82,14 @@ export function PhysicsResultsFetcher() {
           <span className="font-headline">Physics Results Fetcher</span>
         </CardTitle>
         <CardDescription>
-          Enter a list of student roll numbers (one per line) to fetch Physics marks from BISE Faisalabad Board's portal.
+          Enter a list of student roll numbers (one per line) to fetch Physics marks for the First Annual 2024 exam.
+          Results are fetched from the official <a href="https://www.bisefsd.edu.pk/InterResults.aspx" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">BISE Faisalabad Board's portal</a>.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4">
           <Textarea
-            placeholder="e.g.,&#10;401234&#10;401235&#10;401236"
+            placeholder="e.g.,&#10;120166&#10;401235&#10;401236"
             value={rollNumbersInput}
             onChange={(e) => setRollNumbersInput(e.target.value)}
             rows={6}
