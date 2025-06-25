@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Search, Loader2, FileText, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Search, Loader2, FileText, CheckCircle2, XCircle, AlertTriangle, Download } from "lucide-react";
 import { fetchStudentResult } from "@/ai/flows/fetch-student-result";
 
 type Result = {
@@ -74,6 +76,35 @@ export function PhysicsResultsFetcher() {
     }
   };
 
+  const handleGeneratePdf = () => {
+    if (results.length === 0) return;
+
+    const doc = new jsPDF();
+    const tableData = results.map(r => [r.rollNumber, r.studentName, r.physicsMarks, r.status]);
+
+    doc.setFontSize(18);
+    doc.text("Physics Results Report", 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Fetched on: ${new Date().toLocaleDateString()}`, 14, 29);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['Roll Number', 'Student Name', 'Physics Marks', 'Status']],
+      body: tableData,
+      headStyles: { fillColor: [0, 119, 146] }, // A shade of blue-green
+      didDrawPage: (data) => {
+        const str = `Page ${doc.internal.getNumberOfPages()}`;
+        doc.setFontSize(10);
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.text(str, data.settings.margin.left, pageHeight - 10);
+      }
+    });
+
+    doc.save('physics-results.pdf');
+  };
+
   return (
     <Card className="w-full max-w-4xl shadow-xl rounded-xl">
       <CardHeader>
@@ -114,7 +145,13 @@ export function PhysicsResultsFetcher() {
 
       {(isLoading || results.length > 0) && (
         <CardContent>
-          <h3 className="text-xl font-semibold mb-4 font-headline">Results Report</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold font-headline">Results Report</h3>
+            <Button onClick={handleGeneratePdf} disabled={isLoading || results.length === 0}>
+              <Download className="mr-2 h-4 w-4"/>
+              Generate PDF
+            </Button>
+          </div>
           <ScrollArea className="h-80 w-full rounded-md border bg-background/50">
             <Table>
               <TableHeader>
